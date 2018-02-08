@@ -31,7 +31,7 @@ import           Data.Text                          (Text)
 
 import           System.IO.Error                    (IOError)
 
-import           Data.Monoid                        (Last,
+import           Data.Monoid                        (Last, (<>),
                                                      Monoid (mappend, mempty))
 
 import           Data.List                          (stripPrefix)
@@ -221,9 +221,9 @@ data PartialConf = PartialConf
 instance Monoid PartialConf where
   mempty = PartialConf mempty mempty
 
-  mappend _a _b = PartialConf
-    { pcPort       = error "pcPort mappend not implemented"
-    , pcDBFilePath = error "pcDBFilePath mappend not implemented"
+  mappend a b = PartialConf
+    { pcPort       = pcPort a <> pcPort b
+    , pcDBFilePath = pcDBFilePath a <> pcDBFilePath b
     }
 
 -- When it comes to reading the configuration options from the command-line, we

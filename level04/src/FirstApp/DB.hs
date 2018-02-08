@@ -14,6 +14,7 @@ import           Data.Text                          (Text)
 import qualified Data.Text                          as Text
 
 import           Data.Time                          (getCurrentTime)
+import           Data.Bifunctor                     (first)
 
 import           Database.SQLite.Simple             (Connection, Query (Query))
 import qualified Database.SQLite.Simple             as Sql
@@ -22,7 +23,9 @@ import qualified Database.SQLite.SimpleErrors       as Sql
 import           Database.SQLite.SimpleErrors.Types (SQLiteResponse)
 
 import           FirstApp.Types                     (Comment, CommentText,
-                                                     Error, Topic)
+                                                     Error(..), Topic, getTopic, mkTopic,
+                                                     fromDbComment, getCommentText)
+import           FirstApp.DB.Types                  (DBComment)
 
 -- ------------------------------------------------------------------------|
 -- You'll need the documentation for sqlite-simple ready for this section! |
@@ -43,8 +46,8 @@ data FirstAppDB = FirstAppDB
 closeDB
   :: FirstAppDB
   -> IO ()
-closeDB =
-  error "closeDb not implemented"
+closeDB db =
+  Sql.close $ dbConn db
 
 -- Given a `FilePath` to our SQLite DB file, initialise the database and ensure
 -- our Table is there by running a query to create it, if it doesn't exist
@@ -52,13 +55,17 @@ closeDB =
 initDB
   :: FilePath
   -> IO ( Either SQLiteResponse FirstAppDB )
-initDB fp =
-  error "initDb not implemented"
+initDB fp = Sql.runDBAction makeDBGoNow
   where
-  -- Query has an `IsString` instance so string literals like this can be
-  -- converted into a `Query` type when the `OverloadedStrings` language
-  -- extension is enabled.
-    createTableQ = "CREATE TABLE IF NOT EXISTS comments (id INTEGER PRIMARY KEY, topic TEXT, comment TEXT, time TEXT)"
+    makeDBGoNow = do
+      conn <- Sql.open fp
+      Sql.execute_ conn createTableQ
+      pure $ FirstAppDB conn
+      where
+      -- Query has an `IsString` instance so string literals like this can be
+      -- converted into a `Query` type when the `OverloadedStrings` language
+      -- extension is enabled.
+        createTableQ = "CREATE TABLE IF NOT EXISTS comments (id INTEGER PRIMARY KEY, topic TEXT, comment TEXT, time TEXT)"
 
 -- Note that we don't store the `Comment` in the DB, it is the type we build
 -- to send to the outside world. We will be loading our `DbComment` type from
@@ -74,43 +81,71 @@ getComments
   :: FirstAppDB
   -> Topic
   -> IO (Either Error [Comment])
-getComments =
+getComments db t =
   let
     sql = "SELECT id,topic,comment,time FROM comments WHERE topic = ?"
+    q :: IO [DBComment]  -- shouldn't be needed in finished code.
+    q = Sql.query (dbConn db) sql (Sql.Only $ getTopic t)
   -- There are several possible implementations of this function. Paritcularly
   -- there may be a trade-off between deciding to throw an Error if a DbComment
   -- cannot be converted to a Comment, or simply ignoring any DbComment that is
   -- not valid.
-  in
-    error "getComments not implemented"
+  in do
+    eitherRRs <- Sql.runDBAction q
+    -- eitherRRs :: Either SQLiteResponse [DBComment]
+    -- First, convert these to :: Either Error [DBComment]
+    let eitherERs = first SQLError eitherRRs
+    -- We have:
+    -- traverse :: (Applicative f, Traversable t) => (a -> fb) -> t a -> f (t b)
+    -- (>>=) :: Monad m => m a -> (a -> m b) -> m b
+    let eitherComments = eitherERs >>= traverse fromDbComment
+    pure eitherComments
 
 addCommentToTopic
   :: FirstAppDB
   -> Topic
   -> CommentText
   -> IO (Either Error ())
-addCommentToTopic =
+addCommentToTopic db t c =
   let
     sql = "INSERT INTO comments (topic,comment,time) VALUES (?,?,?)"
-  in
-    error "addCommentToTopic not implemented"
+  in do
+    now <- getCurrentTime
+    let x = Sql.execute (dbConn db) sql (getTopic t, getCommentText c, now)
+    -- runDBAction :: IO a -> IO (Either SQLiteResponse a)
+    rawResult <- Sql.runDBAction x
+    let result = first SQLError rawResult
+    pure result
 
 
 getTopics
   :: FirstAppDB
   -> IO (Either Error [Topic])
-getTopics =
+getTopics db =
   let
     sql = "SELECT DISTINCT topic FROM comments"
-  in
-    error "getTopics not implemented"
+    q = Sql.query_ (dbConn db) sql
+    -- need to pull out the text from within the Sql.Only containers.
+    -- q :: IO [Sql.Only Text]
+  in do
+    eitherRTs <- Sql.runDBAction q
+    let eitherETs = first SQLError eitherRTs
+    -- We have:
+    -- traverse :: (Applicative f, Traversable t) => (a -> fb) -> t a -> f (t b)
+    -- (>>=) :: Monad m => m a -> (a -> m b) -> m b
+    let eitherTopics = eitherETs >>= traverse (mkTopic . Sql.fromOnly)
+    pure eitherTopics
 
 deleteTopic
   :: FirstAppDB
   -> Topic
   -> IO (Either Error ())
-deleteTopic =
+deleteTopic db t =
   let
     sql = "DELETE FROM comments WHERE topic = ?"
-  in
-    error "deleteTopic not implemented"
+    x = Sql.execute (dbConn db) sql (Sql.Only . getTopic $ t)
+  in do
+    -- runDBAction :: IO a -> IO (Either SQLiteResponse a)
+    rawResult <- Sql.runDBAction x
+    let result = first SQLError rawResult
+    pure result

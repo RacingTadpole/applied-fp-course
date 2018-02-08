@@ -50,6 +50,8 @@ main = do
           it "Should return 200 with content" $ do
             post "/fudge/add" "Is super tasty."
             get "/fudge/view" `shouldRespondWith` 200
+          it "Should return 400 with empty topic" $ do
+            get "//view" `shouldRespondWith` 400
 
         -- ListRq Spec
         describe "GET /list" $ do

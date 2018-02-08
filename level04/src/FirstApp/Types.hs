@@ -14,12 +14,14 @@ module FirstApp.Types
   , getCommentText
   , renderContentType
   , fromDbComment
+  , modFieldLabel       -- TODO: remove (just for debugging)
   ) where
 
 import           GHC.Generics               (Generic)
 
 import           Data.ByteString            (ByteString)
 import           Data.Text                  (Text)
+import           Data.Char                  (toLower)
 
 import           Data.List                  (stripPrefix)
 import           Data.Maybe                 (fromMaybe)
@@ -30,12 +32,13 @@ import qualified Data.Aeson.Types           as A
 
 import           Data.Time                  (UTCTime)
 
-import           FirstApp.DB.Types          (DBComment)
+import           FirstApp.DB.Types          (DBComment (..))
 import           FirstApp.Types.CommentText (CommentText, mkCommentText
                                             , getCommentText)
 import           FirstApp.Types.Error       (Error( UnknownRoute
                                                   , EmptyCommentText
                                                   , EmptyTopic
+                                                  , SQLError
                                                   )
                                             )
 import           FirstApp.Types.Topic       (Topic, mkTopic, getTopic)
@@ -71,8 +74,10 @@ data Comment = Comment
 modFieldLabel
   :: String
   -> String
-modFieldLabel =
-  error "modFieldLabel not implemented"
+modFieldLabel ('c':'o':'m':'m':'e':'n':'t' : c : s) = (toLower c) : s
+modFieldLabel ('c':'o':'m':'m':'e':'n':'t' : s) = (toLower <$> s)
+modFieldLabel s = s
+-- or, use https://www.haskell.org/hoogle/?hoogle=stripPrefix
 
 instance ToJSON Comment where
   -- This is one place where we can take advantage of our `Generic` instance.
@@ -97,8 +102,11 @@ instance ToJSON Comment where
 fromDbComment
   :: DBComment
   -> Either Error Comment
-fromDbComment =
-  error "fromDbComment not yet implemented"
+fromDbComment dbc =
+  Comment (CommentId $ dbCommentId dbc)
+  <$> (mkTopic $ dbCommentTopic dbc)
+  <*> (mkCommentText $ dbCommentBody dbc)
+  <*> (pure $ dbCommentTime dbc)
 
 data RqType
   = AddRq Topic CommentText

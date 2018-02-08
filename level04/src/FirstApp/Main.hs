@@ -18,6 +18,7 @@ import           Network.HTTP.Types                 (Status, hContentType,
                                                      status200, status400,
                                                      status404, status500)
 
+import           Data.Bifunctor                     (first)
 import qualified Data.ByteString.Lazy.Char8         as LBS
 
 import           Data.Either                        (Either (Left, Right),
@@ -35,7 +36,7 @@ import           Database.SQLite.SimpleErrors.Types (SQLiteResponse)
 import           FirstApp.Conf                      (Conf, firstAppConfig)
 import qualified FirstApp.DB                        as DB
 import           FirstApp.Types                     (ContentType (JSON, PlainText),
-                                                     Error (EmptyCommentText, EmptyTopic, UnknownRoute),
+                                                     Error (..),
                                                      RqType (AddRq, ListRq, ViewRq),
                                                      mkCommentText, mkTopic,
                                                      renderContentType)
@@ -48,7 +49,17 @@ data StartUpError
   deriving Show
 
 runApp :: IO ()
-runApp = error "runApp needs re-implementing"
+runApp = do
+  x <- prepareAppReqs
+  case x of
+    Left e -> error (show e)
+    Right db -> run 3000 (app db)
+
+
+-- DB.FirstAppDB
+-- IO ( Either StartUpError DB.FirstAppDB )
+
+
 
 -- We need to complete the following steps to prepare our app requirements:
 --
@@ -60,8 +71,10 @@ runApp = error "runApp needs re-implementing"
 --
 prepareAppReqs
   :: IO ( Either StartUpError DB.FirstAppDB )
-prepareAppReqs =
-  error "prepareAppReqs not implemented"
+prepareAppReqs = do
+  erdb <- DB.initDB "./appconfig.json"    -- :: IO ( Either SQLiteResponse FirstAppDB )
+  let r = first DbInitErr erdb
+  pure r
 
 -- | Some helper functions to make our lives a little more DRY.
 mkResponse
@@ -129,12 +142,46 @@ handleRequest
   :: DB.FirstAppDB
   -> RqType
   -> IO (Either Error Response)
-handleRequest _db (AddRq _ _) =
-  (resp200 PlainText "Success" <$) <$> error "AddRq handler not implemented"
-handleRequest _db (ViewRq _)  =
-  error "ViewRq handler not implemented"
-handleRequest _db ListRq      =
-  error "ListRq handler not implemented"
+handleRequest db (AddRq t c) =
+  -- (<$) :: a -> f b -> f a
+  -- (resp200 PlainText "Success" <$) :: (Response <$)
+  --                                  :: (f b -> f Response)
+  -- fmap or (<$>) :: (c -> d) -> f' c -> f' d
+  -- (resp200 PlainText "Success" <$) <$> :: f' f b -> f' f Response
+  -- error :: [Char] -> a
+
+  -- addCommentToTopic db t c :: IO (Either Error ())  = f' f b
+  (resp200 PlainText "Success" <$) <$> DB.addCommentToTopic db t c
+
+-- handleRequest db (ViewRq t)  =
+--   -- Need to output :: IO (Either Error Response)
+--   -- eg. dummy answer is: Right $ resp200 PlainText "View Request not implemented"
+--   -- getComments :: FirstAppDB -> Topic -> IO (Either Error [Comment])
+--   -- (>>=) :: Monad m => m a -> (a -> m b) -> m b
+--   -- I want :: IO (Either Error [Comment]) -> IO (Either Error Response)
+--   do
+--     -- eecs :: Either Error [Comment]
+--     eecs <- DB.getComments db t
+--     -- Now I want :: Either Error Response
+--     -- We have (<$>) :: Functor f => (a -> b) -> f a -> f b
+--     let eer = resp200Json <$> eecs
+--     -- _x :: FirstApp.Types.Comment -> Either Error b
+--     pure eer
+
+handleRequest db (ViewRq t)  =
+  (DB.getComments db t) >>= \a ->
+  pure (resp200Json <$> a)
+
+  -- (DB.getComments db t) >>=    -- RHS of >>= :: Either Error [Comment] -> IO (Either Error Response)
+  --   pure _x
+      -- where
+      --  x = _z
+
+handleRequest db ListRq =
+  -- Need to output :: IO (Either Error Response)
+  -- eg. dummy answer is: Right $ resp200 PlainText "List Request not implemented"
+  -- getTopics :: FirstAppDB -> IO (Either Error [Topic])
+  (fmap . fmap) resp200Json (DB.getTopics db)
 
 mkRequest
   :: Request
@@ -178,3 +225,5 @@ mkErrorResponse EmptyCommentText =
   resp400 PlainText "Empty Comment"
 mkErrorResponse EmptyTopic =
   resp400 PlainText "Empty Topic"
+mkErrorResponse (SQLError x) =
+  resp400 PlainText (LBS.pack . show $ x)

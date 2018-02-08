@@ -35,6 +35,9 @@ main = do
           -- a string literal, it will assume that is the expected body of
           -- the request and also check for a 200 response code.
           get "/list" `shouldRespondWith` "List Request not implemented"
+          -- These also work:
+          -- get "/list" `shouldRespondWith` 200
+          -- get "/list" `shouldRespondWith` "List Request not implemented" { matchStatus = 200 }
 
       -- Write some more tests, below are some ideas to get you started:
 
@@ -45,3 +48,20 @@ main = do
       -- 3) The '<topic>/view' route will respond with an error when given an empty topic
       -- 4) A gibberish route will return a 404
 
+      describe "Add Route" $ do
+        it "Should return 200 status" $
+          post "/puppies/add" "sheltie" `shouldRespondWith` 200
+        it "Should return a 400 error if given an empty topic" $
+          post "//add" "sheltie" `shouldRespondWith` 400
+        it "Should return a 400 error if given an empty comment" $
+          post "/puppies/add" "" `shouldRespondWith` 400
+
+      describe "View Route" $ do
+        it "Should return a 'not implemented' message and 200 status" $
+          get "/puppies/view" `shouldRespondWith` "View Request not implemented"
+        it "Should return a 400 error if given an empty topic" $
+          get "//view" `shouldRespondWith` 400
+
+      describe "Bad Route" $ do
+        it "Should return a 404 error if given a gibberish route" $
+          get "//bad" `shouldRespondWith` 404

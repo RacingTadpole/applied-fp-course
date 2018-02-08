@@ -1,0 +1,7 @@
+:set -XOverloadedStrings
+import FirstApp.DB
+import FirstApp.Types.CommentText
+import FirstApp.Types.Topic
+
+(Right db) <- initDB "./sqlite.db" 
+let (Right t) = mkTopic "foo"

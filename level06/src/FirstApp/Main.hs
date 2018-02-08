@@ -55,15 +55,16 @@ data StartUpError
   deriving Show
 
 runApp :: IO ()
-runApp = do
-  appE <- prepareAppReqs
-  either print runWithDbConn appE
-  where
-    runWithDbConn env =
-      appWithDb env >> DB.closeDB (envDB env)
+runApp = error "bad"
+-- runApp = do
+--   appE <- prepareAppReqs
+--   either print runWithDbConn appE
+--   where
+--     runWithDbConn env =
+--       appWithDb env >> DB.closeDB (envDB env)
 
-    appWithDb env =
-      run ( confPortToWai $ envConfig env ) (app env)
+--     appWithDb env =
+--       run ( confPortToWai $ envConfig env ) (app env)
 
 prepareAppReqs
   :: IO (Either StartUpError Env)

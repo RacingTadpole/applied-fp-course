@@ -154,6 +154,17 @@ handleRequest db rqType =
     AddRq t c -> (resp200 PlainText "Success" <$) <$> DB.addCommentToTopic db t c
     ViewRq t  -> fmap resp200Json <$> DB.getComments db t
     ListRq    -> fmap resp200Json <$> DB.getTopics db
+    -- fmap _x <$> _y has:
+    -- _x :: a0 -> b
+    -- _y :: f (f1 a0)
+    -- which is the same as (fmap _x) <$> _y, and (fmap _x <$>) _y
+    -- and also the same as (_x <$>) <$> _y
+    -- and (fmap . fmap) _x _y
+    -- fmap :: Functor f => (a -> b) -> f a -> f b
+    -- resp200Json :: a -> Response
+    -- So:
+    -- fmap resp200Json :: f a -> f Response
+    -- fmap resp200Json <$> :: f' f a -> f' f Response
 
 mkRequest
   :: Request

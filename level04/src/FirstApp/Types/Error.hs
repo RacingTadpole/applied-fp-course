@@ -3,11 +3,13 @@
 module FirstApp.Types.Error (Error(..), nonEmptyText) where
 
 import Data.Text (Text)
+import Database.SQLite.SimpleErrors.Types (SQLiteResponse)
 
 data Error
   = UnknownRoute
   | EmptyCommentText
   | EmptyTopic
+  | SQLError SQLiteResponse
   -- We need another constructor for our DB error types.
   deriving (Eq, Show)
 
