@@ -98,7 +98,7 @@ addCommentToTopic
   -> AppM (Either Error ())
 addCommentToTopic t c = do
   -- Record the time this comment was created.
-  nowish <- getCurrentTime
+  now <- liftIO getCurrentTime
   -- Note the triple, matching the number of values we're trying to insert, plus
   -- one for the table name.
   let q =
@@ -109,7 +109,7 @@ addCommentToTopic t c = do
   -- We use the execute function this time as we don't care about anything
   -- that is returned. The execute function will still return the number of rows
   -- affected by the query, which in our case should always be 1.
-  runDB Right $ \x -> Sql.execute x q (getTopic t, getCommentText c, nowish)
+  runDB Right $ \x -> Sql.execute x q (getTopic t, getCommentText c, now)
   -- An alternative is to write a returning query to get the Id of the DbComment
   -- we've created. We're being lazy (hah!) for now, so assume awesome and move on.
 
@@ -123,7 +123,7 @@ getTopics =
 deleteTopic
   :: Topic
   -> AppM (Either Error ())
-deleteTopic db t =
+deleteTopic t =
   let q = "DELETE FROM comments WHERE topic = ?"
   in
     runDB Right $ \x -> Sql.execute x q [getTopic t]
